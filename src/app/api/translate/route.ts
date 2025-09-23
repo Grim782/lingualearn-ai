@@ -3,7 +3,22 @@ import { checkRateLimit, getIdentifier } from "@/lib/rate-limit";
 import { hfFetch } from "@/lib/hf";
 import { splitIntoChunks } from "@/lib/chunk";
 
-const HF_MODEL = "facebook/m2m100_418M";
+const HF_MODEL = "facebook/nllb-200-distilled-600M";
+
+// Map simple BCP-47-ish codes to NLLB language tags (tgt_lang)
+const NLLB_TGT_MAP: Record<string, string> = {
+  en: "eng_Latn",
+  es: "spa_Latn",
+  fr: "fra_Latn",
+  de: "deu_Latn",
+  ar: "arb_Arab",
+  hi: "hin_Deva",
+  zh: "zho_Hans",
+  ja: "jpn_Jpan",
+};
+
+// Default source language assumption for NLLB (notes typically in English)
+const NLLB_DEFAULT_SRC = "eng_Latn";
 
 async function readTextFromForm(form: FormData): Promise<{ text: string; warnings: string[] }> {
   const warnings: string[] = [];
@@ -135,11 +150,21 @@ export async function POST(req: Request) {
 
     let translatedParts: string[] = [];
     for (const chunk of chunks) {
+      // Resolve NLLB target tag
+      const tgt = NLLB_TGT_MAP[target.toLowerCase()];
+      if (!tgt) {
+        return NextResponse.json(
+          { error: `Unsupported target language: ${target}. Supported: ${Object.keys(NLLB_TGT_MAP).join(", ")}` },
+          { status: 400 }
+        );
+      }
+
+      // Primary payload for NLLB: requires tgt_lang, src_lang recommended
       const payload = {
         inputs: chunk,
-        parameters: { forced_bos_token: target },
+        parameters: { tgt_lang: tgt, src_lang: NLLB_DEFAULT_SRC },
         options: { wait_for_model: true },
-      };
+      } as const;
       const data = await hfFetch<any>({ model: HF_MODEL, payload });
       const piece = Array.isArray(data)
         ? data[0]?.translation_text ?? data[0]?.generated_text ?? ""
