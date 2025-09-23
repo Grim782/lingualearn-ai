@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Copy, Eraser, FolderDown, Languages, Play, Save, Volume2, Loader2, Pause, Square, Download } from "lucide-react";
-import { translateText, ttsSynthesize, generateQuiz } from "@/lib/api";
+import { translateText, ttsSynthesize } from "@/lib/api";
+import Link from "next/link";
 import { loadSessions, saveSession, deleteSession, type LinguaSession } from "@/lib/storage";
 import { Toaster } from "@/components/ui/sonner";
 import { splitIntoChunks } from "@/lib/chunk";
@@ -34,7 +34,6 @@ export default function WorkspacePage() {
   const [translated, setTranslated] = useState("");
   const [loading, setLoading] = useState(false);
   const [audioSrc, setAudioSrc] = useState<string | null>(null);
-  const [quiz, setQuiz] = useState<any>(null);
   const [sessions, setSessions] = useState<LinguaSession[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [chunkProgress, setChunkProgress] = useState(0);
@@ -43,16 +42,6 @@ export default function WorkspacePage() {
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("easy");
-  const [answers, setAnswers] = useState<string[]>([]);
-  const [result, setResult] = useState<
-    | null
-    | {
-        correct: number;
-        total: number;
-        wrong: { index: number; question: string; your: string; correct: string }[];
-      }
-  >(null);
 
   useEffect(() => {
     setSessions(loadSessions());
@@ -143,30 +132,11 @@ export default function WorkspacePage() {
     }
   }
 
-  async function handleQuiz() {
-    if (!translated && !text && !uploadedContent) return;
-    try {
-      setLoading(true);
-      const source = translated || text || uploadedContent;
-      const res = await generateQuiz(source, language, { difficulty, count: 10 });
-      setQuiz(res.quiz);
-      const count = (res.quiz?.short?.length || 0) as number;
-      setAnswers(Array.from({ length: count }, () => ""));
-      setResult(null);
-      toast.success("Quiz generated");
-    } catch (e: any) {
-      toast.error(e?.message || "Quiz failed");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   function onSave() {
     const session = saveSession({
       source: text.trim().length > 0 ? text : uploadedContent,
       targetLang: language,
       translation: translated,
-      quiz,
     });
     setSessions(loadSessions());
     toast.success("Session saved");
@@ -227,7 +197,6 @@ export default function WorkspacePage() {
   function onClear() {
     setText("");
     setTranslated("");
-    setQuiz(null);
     setUploadedContent("");
     setUploadedFileName("");
     if (audioSrc) URL.revokeObjectURL(audioSrc);
@@ -265,7 +234,6 @@ export default function WorkspacePage() {
   function loadFromHistory(s: LinguaSession) {
     setText(s.source);
     setTranslated(s.translation || "");
-    setQuiz(s.quiz || null);
     setLanguage(s.targetLang);
     toast("Loaded session");
   }
@@ -298,31 +266,6 @@ export default function WorkspacePage() {
     } else {
       playAudio();
     }
-  }
-
-  function normalizeAnswer(s: string) {
-    return (s || "")
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}\s]/gu, "")
-      .trim();
-  }
-
-  function scoreQuiz() {
-    if (!quiz?.short?.length) return;
-    const wrong: { index: number; question: string; your: string; correct: string }[] = [];
-    let correct = 0;
-    quiz.short.forEach((q: any, i: number) => {
-      const expected = normalizeAnswer(q.answer);
-      const got = normalizeAnswer(answers[i] || "");
-      if (expected && got && (got === expected || expected.includes(got) || got.includes(expected))) {
-        correct += 1;
-      } else if (expected || got) {
-        wrong.push({ index: i, question: q.question, your: answers[i] || "", correct: q.answer || "" });
-      } else {
-        wrong.push({ index: i, question: q.question, your: "", correct: q.answer || "" });
-      }
-    });
-    setResult({ correct, total: quiz.short.length, wrong });
   }
 
   return (
@@ -419,9 +362,6 @@ export default function WorkspacePage() {
               <Button variant="secondary" onClick={handleTTS} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate audio">
                 <Volume2 className="h-4 w-4 mr-2" /> Listen
               </Button>
-              <Button variant="outline" onClick={handleQuiz} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate quiz">
-                <Play className="h-4 w-4 mr-2" /> Practice
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -444,14 +384,13 @@ export default function WorkspacePage() {
                 </Button>
               )}
             </div>
-            <CardDescription>View translations, audio playback, and practice quizzes.</CardDescription>
+            <CardDescription>View translations and audio playback. Your history is saved.</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="translate" className="w-full">
-              <TabsList className="grid grid-cols-4">
+              <TabsList className="grid grid-cols-3">
                 <TabsTrigger value="translate">Translate</TabsTrigger>
                 <TabsTrigger value="listen">Listen</TabsTrigger>
-                <TabsTrigger value="practice">Practice</TabsTrigger>
                 <TabsTrigger value="history">History</TabsTrigger>
               </TabsList>
 
@@ -484,76 +423,7 @@ export default function WorkspacePage() {
                 )}
               </TabsContent>
 
-              <TabsContent value="practice" className="mt-4 space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="grid gap-1">
-                    <Label htmlFor="difficulty" className="text-xs">Difficulty</Label>
-                    <Select value={difficulty} onValueChange={(v) => setDifficulty(v as any)}>
-                      <SelectTrigger id="difficulty" className="w-[160px]">
-                        <SelectValue placeholder="Select difficulty" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="easy">Easy</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="hard">Hard</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button variant="secondary" onClick={handleQuiz} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate quiz now">Generate Quiz</Button>
-                  {quiz?.short?.length ? (
-                    <Button variant="default" onClick={scoreQuiz} aria-label="Score quiz">Done</Button>
-                  ) : null}
-                </div>
-                {quiz?.short?.length ? (
-                  <div className="space-y-4">
-                    <div className="text-sm text-muted-foreground">Answer the questions below. There are {quiz.short.length} questions.</div>
-                    <ul className="space-y-3">
-                      {quiz.short.map((q: any, idx: number) => (
-                        <li key={idx} className="rounded-md border p-3">
-                          <p className="font-medium mb-2">{idx + 1}. {q.question}</p>
-                          <Input
-                            placeholder="Type your answer"
-                            value={answers[idx] || ""}
-                            onChange={(e) => {
-                              const next = answers.slice();
-                              next[idx] = e.target.value;
-                              setAnswers(next);
-                            }}
-                            aria-label={`Answer for question ${idx + 1}`}
-                          />
-                          {result && result.wrong.find(w => w.index === idx) ? (
-                            <p className="mt-2 text-xs text-destructive">Correct answer: {q.answer || "(not provided)"}</p>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-
-                    {result ? (
-                      <div className="rounded-md border bg-accent/40 p-3">
-                        <p className="font-medium">Score: {result.correct} / {result.total}</p>
-                        {result.wrong.length > 0 ? (
-                          <div className="mt-2 text-sm">
-                            <p className="font-medium mb-1">Review incorrect answers:</p>
-                            <ul className="list-disc pl-5 space-y-1">
-                              {result.wrong.map(w => (
-                                <li key={w.index}>
-                                  <span className="font-medium">Q{w.index + 1}:</span> {w.question}
-                                  <div className="text-xs text-muted-foreground">Your answer: {w.your || "(empty)"}</div>
-                                  <div className="text-xs">Correct: {w.correct || "(not provided)"}</div>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        ) : (
-                          <p className="text-sm mt-1">Excellent! All answers correct.</p>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Generate a quiz to practice your understanding.</p>
-                )}
-              </TabsContent>
+              {/* Practice moved to dedicated page at /practice */}
 
               <TabsContent value="history" className="mt-4">
                 {sessions.length ? (
