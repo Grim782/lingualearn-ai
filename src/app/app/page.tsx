@@ -42,6 +42,7 @@ export default function WorkspacePage() {
   const [uploadedContent, setUploadedContent] = useState<string>("");
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     setSessions(loadSessions());
@@ -149,7 +150,7 @@ export default function WorkspacePage() {
 
   function onSave() {
     const session = saveSession({
-      source: text,
+      source: text.trim().length > 0 ? text : uploadedContent,
       targetLang: language,
       translation: translated,
       quiz,
@@ -261,6 +262,31 @@ export default function WorkspacePage() {
     setSessions(loadSessions());
   }
 
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a) return;
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onEnded = () => setIsPlaying(false);
+    a.addEventListener("play", onPlay);
+    a.addEventListener("pause", onPause);
+    a.addEventListener("ended", onEnded);
+    return () => {
+      a.removeEventListener("play", onPlay);
+      a.removeEventListener("pause", onPause);
+      a.removeEventListener("ended", onEnded);
+    };
+  }, [audioSrc]);
+
+  function togglePlayStop() {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      stopAudio();
+    } else {
+      playAudio();
+    }
+  }
+
   return (
     <div className="min-h-screen mx-auto w-full max-w-6xl px-6 py-8">
       <Toaster richColors position="top-right" />
@@ -307,9 +333,9 @@ export default function WorkspacePage() {
 
             <div className="grid gap-2">
               <Label htmlFor="notes">Your notes</Label>
-              <Textarea id="notes" value={text} onChange={(e) => setText(e.target.value)} rows={10} placeholder="Paste text or upload a file..." />
+              <Textarea id="notes" value={text} onChange={(e) => setText(e.target.value)} rows={10} placeholder="Paste text or upload a file..." disabled={!!uploadedFileName} />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{wordCount} words</span>
+                <span>{uploadedFileName ? "File selected — textarea disabled" : `${wordCount} words`}</span>
                 <span>{charCount} characters</span>
               </div>
             </div>
@@ -364,7 +390,18 @@ export default function WorkspacePage() {
 
         <Card aria-label="Output panel">
           <CardHeader>
-            <CardTitle>Output</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <CardTitle>Output</CardTitle>
+                <span className="inline-flex items-center rounded-full bg-accent text-accent-foreground border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide">Source: {uploadedContent.trim().length > 0 ? "file" : "typed"}</span>
+              </div>
+              {audioSrc && (
+                <Button size="sm" variant="outline" onClick={togglePlayStop} aria-label={isPlaying ? "Stop audio" : "Play audio"}>
+                  {isPlaying ? <Square className="h-3.5 w-3.5 mr-1" /> : <Play className="h-3.5 w-3.5 mr-1" />}
+                  {isPlaying ? "Stop" : "Play"}
+                </Button>
+              )}
+            </div>
             <CardDescription>View translations, audio playback, and practice quizzes.</CardDescription>
           </CardHeader>
           <CardContent>
