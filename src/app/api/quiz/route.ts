@@ -9,11 +9,13 @@ const FALLBACK_MODELS = [
   "google/flan-t5-small",
 ];
 
-function buildPrompt(text: string, lang: string) {
+function buildPrompt(text: string, lang: string, count: number, difficulty?: string) {
   return (
-    `You are an education assistant. Based on the following study material, generate a quiz as a JSON array of EXACTLY 4 items. ` +
-    `Each item must be an object: {"question":"...","options":["A","B","C","D"],"answer":"A"}. ` +
-    `The JSON must be valid and concise with NO extra commentary. Use the target language: ${lang}.\n` +
+    `You are an expert education assistant. Based on the following study material, generate a quiz as a JSON array of EXACTLY ${count} items. ` +
+    `Each item MUST be an object with ONLY these fields: {"question":"...","answer":"..."}. NO multiple choice options and NO extra commentary. ` +
+    `Questions and answers must be written in the target language: ${lang}. ` +
+    (difficulty ? `Make the difficulty level ${difficulty} (adjust question complexity accordingly). ` : "") +
+    `Ensure answers are concise, factual, and directly checkable from the material.\n` +
     `Study Material:\n${text}`
   );
 }
@@ -43,6 +45,7 @@ export async function POST(req: Request) {
     const text: string = body?.text || "";
     const targetLang: string = body?.targetLang || body?.target || body?.lang || "";
     const difficulty: string | undefined = body?.difficulty;
+    const requestedCount: number = Math.max(10, Math.min(20, Number(body?.count) || 10));
 
     if (!text || !targetLang)
       return NextResponse.json({ error: "Missing text or targetLang" }, { status: 400 });
@@ -50,11 +53,11 @@ export async function POST(req: Request) {
     if (!process.env.HUGGING_FACE_API_KEY)
       return NextResponse.json({ error: "Missing HUGGING_FACE_API_KEY" }, { status: 500 });
 
-    const prompt = buildPrompt(text, targetLang) + (difficulty ? `\nDifficulty: ${difficulty}` : "");
+    const prompt = buildPrompt(text, targetLang, requestedCount, difficulty);
 
     const payload = {
       inputs: prompt,
-      parameters: { max_new_tokens: 256, temperature: 0.3 },
+      parameters: { max_new_tokens: 512, temperature: 0.3 },
       options: { wait_for_model: true },
     };
 
@@ -73,25 +76,31 @@ export async function POST(req: Request) {
       }
     }
 
-    let questions = extractJsonArray(raw);
-    if (!questions.length) {
-      // Fallback minimal 4 questions
-      questions = [1, 2, 3, 4].map((i) => ({
-        question: `Key idea ${i}?`,
-        options: ["Option A", "Option B", "Option C", "Option D"],
-        answer: "Option A",
-      }));
+    let items = extractJsonArray(raw);
+
+    // Normalize to short-answer format { question, answer }
+    let short = Array.isArray(items)
+      ? items.map((q: any, i: number) => ({
+          question: String(q?.question ?? q?.q ?? `Question ${i + 1}`),
+          answer: String(q?.answer ?? q?.a ?? ""),
+        }))
+      : [];
+
+    // Pad if the model returned fewer than requestedCount
+    if (short.length < requestedCount) {
+      const start = short.length;
+      for (let i = start; i < requestedCount; i++) {
+        short.push({ question: `Key idea ${i + 1}?`, answer: "" });
+      }
     }
 
-    // Backward-compatible shape expected by UI: { quiz: { mcq: [...], short: [...] } }
-    const mcq = questions.filter((q: any) => Array.isArray(q.options) && q.options.length >= 2);
-    const short = questions
-      .filter((q: any) => !Array.isArray(q.options) || q.options.length < 2)
-      .map((q: any) => ({ question: q.question, answer: q.answer || "" }));
+    // Trim to exactly requestedCount
+    short = short.slice(0, requestedCount);
 
-    const quiz = { mcq, short };
+    // Backward-compatible shape expected by UI: { quiz: { mcq: [], short: [...] } }
+    const quiz = { mcq: [] as any[], short };
 
-    return NextResponse.json({ questions, quiz });
+    return NextResponse.json({ questions: short, quiz });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Unexpected error" }, { status: 500 });
   }

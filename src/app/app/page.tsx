@@ -43,6 +43,16 @@ export default function WorkspacePage() {
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("easy");
+  const [answers, setAnswers] = useState<string[]>([]);
+  const [result, setResult] = useState<
+    | null
+    | {
+        correct: number;
+        total: number;
+        wrong: { index: number; question: string; your: string; correct: string }[];
+      }
+  >(null);
 
   useEffect(() => {
     setSessions(loadSessions());
@@ -138,8 +148,11 @@ export default function WorkspacePage() {
     try {
       setLoading(true);
       const source = translated || text || uploadedContent;
-      const res = await generateQuiz(source, language);
+      const res = await generateQuiz(source, language, { difficulty, count: 10 });
       setQuiz(res.quiz);
+      const count = (res.quiz?.short?.length || 0) as number;
+      setAnswers(Array.from({ length: count }, () => ""));
+      setResult(null);
       toast.success("Quiz generated");
     } catch (e: any) {
       toast.error(e?.message || "Quiz failed");
@@ -287,6 +300,31 @@ export default function WorkspacePage() {
     }
   }
 
+  function normalizeAnswer(s: string) {
+    return (s || "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, "")
+      .trim();
+  }
+
+  function scoreQuiz() {
+    if (!quiz?.short?.length) return;
+    const wrong: { index: number; question: string; your: string; correct: string }[] = [];
+    let correct = 0;
+    quiz.short.forEach((q: any, i: number) => {
+      const expected = normalizeAnswer(q.answer);
+      const got = normalizeAnswer(answers[i] || "");
+      if (expected && got && (got === expected || expected.includes(got) || got.includes(expected))) {
+        correct += 1;
+      } else if (expected || got) {
+        wrong.push({ index: i, question: q.question, your: answers[i] || "", correct: q.answer || "" });
+      } else {
+        wrong.push({ index: i, question: q.question, your: "", correct: q.answer || "" });
+      }
+    });
+    setResult({ correct, total: quiz.short.length, wrong });
+  }
+
   return (
     <div className="min-h-screen mx-auto w-full max-w-6xl px-6 py-8">
       <Toaster richColors position="top-right" />
@@ -395,10 +433,14 @@ export default function WorkspacePage() {
                 <CardTitle>Output</CardTitle>
                 <span className="inline-flex items-center rounded-full bg-accent text-accent-foreground border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide">Source: {uploadedContent.trim().length > 0 ? "file" : "typed"}</span>
               </div>
-              {audioSrc && (
+              {audioSrc ? (
                 <Button size="sm" variant="outline" onClick={togglePlayStop} aria-label={isPlaying ? "Stop audio" : "Play audio"}>
                   {isPlaying ? <Square className="h-3.5 w-3.5 mr-1" /> : <Play className="h-3.5 w-3.5 mr-1" />}
                   {isPlaying ? "Stop" : "Play"}
+                </Button>
+              ) : (
+                <Button size="sm" variant="secondary" onClick={handleTTS} aria-label="Generate audio">
+                  <Volume2 className="h-3.5 w-3.5 mr-1" /> Generate Audio
                 </Button>
               )}
             </div>
@@ -443,38 +485,68 @@ export default function WorkspacePage() {
               </TabsContent>
 
               <TabsContent value="practice" className="mt-4 space-y-3">
-                <Button variant="secondary" onClick={handleQuiz} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate quiz now">Generate Quiz</Button>
-                {quiz ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="grid gap-1">
+                    <Label htmlFor="difficulty" className="text-xs">Difficulty</Label>
+                    <Select value={difficulty} onValueChange={(v) => setDifficulty(v as any)}>
+                      <SelectTrigger id="difficulty" className="w-[160px]">
+                        <SelectValue placeholder="Select difficulty" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="easy">Easy</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="hard">Hard</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button variant="secondary" onClick={handleQuiz} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate quiz now">Generate Quiz</Button>
+                  {quiz?.short?.length ? (
+                    <Button variant="default" onClick={scoreQuiz} aria-label="Score quiz">Done</Button>
+                  ) : null}
+                </div>
+                {quiz?.short?.length ? (
                   <div className="space-y-4">
-                    {quiz.mcq?.length ? (
-                      <div>
-                        <h3 className="font-semibold mb-2">Multiple Choice</h3>
-                        <ul className="space-y-3">
-                          {quiz.mcq.map((q: any, idx: number) => (
-                            <li key={idx} className="rounded-md border p-3">
-                              <p className="font-medium">{q.question}</p>
-                              <ul className="mt-2 grid gap-2">
-                                {q.options.map((opt: string, oidx: number) => (
-                                  <li key={oidx} className="text-sm">• {opt}</li>
-                                ))}
-                              </ul>
-                              <p className="text-xs text-muted-foreground mt-2">Answer: {q.answer}</p>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {quiz.short?.length ? (
-                      <div>
-                        <h3 className="font-semibold mb-2">Short Answer</h3>
-                        <ul className="space-y-3">
-                          {quiz.short.map((q: any, idx: number) => (
-                            <li key={idx} className="rounded-md border p-3">
-                              <p className="font-medium">{q.question}</p>
-                              <p className="text-xs text-muted-foreground mt-2">Expected: {q.answer}</p>
-                            </li>
-                          ))}
-                        </ul>
+                    <div className="text-sm text-muted-foreground">Answer the questions below. There are {quiz.short.length} questions.</div>
+                    <ul className="space-y-3">
+                      {quiz.short.map((q: any, idx: number) => (
+                        <li key={idx} className="rounded-md border p-3">
+                          <p className="font-medium mb-2">{idx + 1}. {q.question}</p>
+                          <Input
+                            placeholder="Type your answer"
+                            value={answers[idx] || ""}
+                            onChange={(e) => {
+                              const next = answers.slice();
+                              next[idx] = e.target.value;
+                              setAnswers(next);
+                            }}
+                            aria-label={`Answer for question ${idx + 1}`}
+                          />
+                          {result && result.wrong.find(w => w.index === idx) ? (
+                            <p className="mt-2 text-xs text-destructive">Correct answer: {q.answer || "(not provided)"}</p>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+
+                    {result ? (
+                      <div className="rounded-md border bg-accent/40 p-3">
+                        <p className="font-medium">Score: {result.correct} / {result.total}</p>
+                        {result.wrong.length > 0 ? (
+                          <div className="mt-2 text-sm">
+                            <p className="font-medium mb-1">Review incorrect answers:</p>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {result.wrong.map(w => (
+                                <li key={w.index}>
+                                  <span className="font-medium">Q{w.index + 1}:</span> {w.question}
+                                  <div className="text-xs text-muted-foreground">Your answer: {w.your || "(empty)"}</div>
+                                  <div className="text-xs">Correct: {w.correct || "(not provided)"}</div>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : (
+                          <p className="text-sm mt-1">Excellent! All answers correct.</p>
+                        )}
                       </div>
                     ) : null}
                   </div>

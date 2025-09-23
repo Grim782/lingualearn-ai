@@ -18,11 +18,15 @@ export async function ttsSynthesize(text: string, targetLang: string) {
   return r.json();
 }
 
-export async function generateQuiz(text: string, targetLang: string) {
+export async function generateQuiz(
+  text: string,
+  targetLang: string,
+  options?: { difficulty?: "easy" | "medium" | "hard"; count?: number }
+) {
   const r = await fetch("/api/quiz", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, targetLang }),
+    body: JSON.stringify({ text, targetLang, difficulty: options?.difficulty, count: options?.count }),
   });
   if (!r.ok) throw new Error((await r.json()).error || "Failed to generate quiz");
   return r.json();
