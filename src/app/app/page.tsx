@@ -13,6 +13,7 @@ import { Copy, Eraser, FolderDown, Languages, Play, Save, Volume2 } from "lucide
 import { translateText, ttsSynthesize, generateQuiz } from "@/lib/api";
 import { loadSessions, saveSession, deleteSession, type LinguaSession } from "@/lib/storage";
 import { Toaster } from "@/components/ui/sonner";
+import { splitIntoChunks } from "@/lib/chunk";
 
 const LANGUAGES = [
   { value: "en", label: "English" },
@@ -34,6 +35,8 @@ export default function WorkspacePage() {
   const [quiz, setQuiz] = useState<any>(null);
   const [sessions, setSessions] = useState<LinguaSession[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [chunkProgress, setChunkProgress] = useState(0);
+  const [chunkTotal, setChunkTotal] = useState(0);
 
   useEffect(() => {
     setSessions(loadSessions());
@@ -45,20 +48,42 @@ export default function WorkspacePage() {
     if (!canRun) return;
     try {
       setLoading(true);
-      const res = await translateText(text, language);
-      setTranslated(res.translation);
-      // Show chunking info and warnings when applicable
-      if (res?.chunks && res.chunks > 1) {
-        toast.info(`Translated in ${res.chunks} chunks`);
+      // Client-side chunking for live progress; server also supports chunking safely.
+      const { chunks } = splitIntoChunks(text);
+      if (chunks.length > 1) {
+        setChunkTotal(chunks.length);
+        setChunkProgress(0);
+        const outputs: string[] = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const res = await translateText(chunks[i], language);
+          const out = (res as any).translated || (res as any).translation || "";
+          outputs.push(out);
+          setChunkProgress(i + 1);
+        }
+        const combined = outputs.join("\n\n");
+        setTranslated(combined);
+        toast.success("Translated successfully");
+        toast.info(`Translated in ${chunks.length} chunks`);
+      } else {
+        const res = await translateText(text, language);
+        setTranslated(res.translation);
+        // Show chunking info and warnings when applicable
+        if (res?.chunks && res.chunks > 1) {
+          toast.info(`Translated in ${res.chunks} chunks`);
+        }
+        if (Array.isArray(res?.warnings) && res.warnings.length) {
+          toast.message(res.warnings[0]);
+        }
+        toast.success("Translated successfully");
       }
-      if (Array.isArray(res?.warnings) && res.warnings.length) {
-        toast.message(res.warnings[0]);
-      }
-      toast.success("Translated successfully");
     } catch (e: any) {
       toast.error(e?.message || "Translation failed");
     } finally {
       setLoading(false);
+      setTimeout(() => {
+        setChunkProgress(0);
+        setChunkTotal(0);
+      }, 400);
     }
   }
 
@@ -178,7 +203,7 @@ export default function WorkspacePage() {
   return (
     <div className="min-h-screen mx-auto w-full max-w-6xl px-6 py-8">
       <Toaster richColors position="top-right" />
-      <div className="flex items-center justify-between gap-3 mb-6">
+      <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2" aria-label="App header">
           <Languages className="h-5 w-5 text-emerald-600" aria-hidden />
           <h1 className="font-semibold">LinguaLearn Workspace</h1>
@@ -189,6 +214,11 @@ export default function WorkspacePage() {
           <Button onClick={onSave} aria-label="Save session" className="bg-emerald-600 hover:bg-emerald-700"><Save className="h-4 w-4 mr-2" />Save</Button>
         </div>
       </div>
+      {loading && chunkTotal > 1 ? (
+        <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" role="status" aria-live="polite">
+          Translating chunk {chunkProgress}/{chunkTotal}...
+        </div>
+      ) : null}
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card aria-label="Input panel">
