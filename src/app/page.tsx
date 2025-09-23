@@ -47,11 +47,18 @@ export default function HomePage() {
                 <a href="#features" aria-label="Learn more about features">Learn More</a>
               </Button>
             </motion.div>
-            <ul className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> 95+ Lighthouse target</li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> TTS in 100+ languages</li>
-              <li className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /> Quiz generation</li>
-            </ul>
+            {/* Re-styled feature highlights as pill buttons for better visual flow */}
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Button variant="secondary" className="justify-start rounded-full px-4 py-5 text-sm">
+                <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> 95+ Lighthouse target
+              </Button>
+              <Button variant="secondary" className="justify-start rounded-full px-4 py-5 text-sm">
+                <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> TTS in 100+ languages
+              </Button>
+              <Button variant="secondary" className="justify-start rounded-full px-4 py-5 text-sm">
+                <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> Quiz generation
+              </Button>
+            </div>
           </div>
           <motion.figure initial={{ scale: 0.96, opacity: 0 }} whileInView={{ scale: 1, opacity: 1 }} viewport={{ once: true, amount: 0.4 }} transition={{ duration: 0.6 }} className="relative aspect-[4/3] rounded-xl overflow-hidden border border-border shadow-sm">
             <img src="https://images.unsplash.com/photo-1517849845537-4d257902454a?q=80&w=1600&auto=format&fit=crop" alt="Students learning with devices" className="absolute inset-0 h-full w-full object-cover" />
@@ -140,10 +147,6 @@ export default function HomePage() {
       <footer id="footer" className="mt-auto border-t border-border">
         <div className="mx-auto w-full max-w-6xl px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} LinguaLearn AI. Built for inclusive education.</p>
-          <div className="flex items-center gap-3">
-            <a className="text-sm hover:underline" href="https://huggingface.co" target="_blank" rel="noreferrer">Hugging Face</a>
-            <a className="text-sm hover:underline" href="https://vercel.com" target="_blank" rel="noreferrer">Deploy on Vercel</a>
-          </div>
         </div>
       </footer>
     </div>

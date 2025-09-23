@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Copy, Eraser, FolderDown, Languages, Play, Save, Volume2, Loader2, Pause, Square, Download } from "lucide-react";
 import { translateText, ttsSynthesize } from "@/lib/api";
-import Link from "next/link";
 import { loadSessions, saveSession, deleteSession, type LinguaSession } from "@/lib/storage";
 import { Toaster } from "@/components/ui/sonner";
 import { splitIntoChunks } from "@/lib/chunk";
@@ -42,6 +41,16 @@ export default function WorkspacePage() {
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [audioTime, setAudioTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+
+  // helper to format time mm:ss
+  function fmt(t: number) {
+    if (!isFinite(t) || t < 0) t = 0;
+    const m = Math.floor(t / 60);
+    const s = Math.floor(t % 60);
+    return `${m}:${String(s).padStart(2, "0")}`;
+  }
 
   useEffect(() => {
     setSessions(loadSessions());
@@ -249,13 +258,19 @@ export default function WorkspacePage() {
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onEnded = () => setIsPlaying(false);
+    const onTime = () => setAudioTime(a.currentTime || 0);
+    const onMeta = () => setAudioDuration(a.duration || 0);
     a.addEventListener("play", onPlay);
     a.addEventListener("pause", onPause);
     a.addEventListener("ended", onEnded);
+    a.addEventListener("timeupdate", onTime);
+    a.addEventListener("loadedmetadata", onMeta);
     return () => {
       a.removeEventListener("play", onPlay);
       a.removeEventListener("pause", onPause);
       a.removeEventListener("ended", onEnded);
+      a.removeEventListener("timeupdate", onTime);
+      a.removeEventListener("loadedmetadata", onMeta);
     };
   }, [audioSrc]);
 
@@ -327,7 +342,7 @@ export default function WorkspacePage() {
               className="w-full rounded-md border-2 border-dashed border-border p-4 text-sm bg-accent/30"
               aria-label="Upload notes file dropzone"
             >
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col items-center gap-2 text-center">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -359,31 +374,13 @@ export default function WorkspacePage() {
                   <><FolderDown className="h-4 w-4 mr-2" /> Translate</>
                 )}
               </Button>
-              <Button variant="secondary" onClick={handleTTS} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate audio">
-                <Volume2 className="h-4 w-4 mr-2" /> Listen
-              </Button>
             </div>
           </CardContent>
         </Card>
 
         <Card aria-label="Output panel">
           <CardHeader>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <CardTitle>Output</CardTitle>
-                <span className="inline-flex items-center rounded-full bg-accent text-accent-foreground border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide">Source: {uploadedContent.trim().length > 0 ? "file" : "typed"}</span>
-              </div>
-              {audioSrc ? (
-                <Button size="sm" variant="outline" onClick={togglePlayStop} aria-label={isPlaying ? "Stop audio" : "Play audio"}>
-                  {isPlaying ? <Square className="h-3.5 w-3.5 mr-1" /> : <Play className="h-3.5 w-3.5 mr-1" />}
-                  {isPlaying ? "Stop" : "Play"}
-                </Button>
-              ) : (
-                <Button size="sm" variant="secondary" onClick={handleTTS} aria-label="Generate audio">
-                  <Volume2 className="h-3.5 w-3.5 mr-1" /> Generate Audio
-                </Button>
-              )}
-            </div>
+            <CardTitle>Output</CardTitle>
             <CardDescription>View translations and audio playback. Your history is saved.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -419,6 +416,19 @@ export default function WorkspacePage() {
                       <Button size="sm" variant="outline" onClick={downloadAudio} aria-label="Download audio"><Download className="h-4 w-4 mr-2" />Download</Button>
                     </div>
                     <audio ref={audioRef} src={audioSrc} controls className="w-full" aria-label="Text to speech player" />
+                    {/* Custom progress + duration */}
+                    <div className="mt-2">
+                      <div className="h-1.5 w-full rounded bg-muted overflow-hidden">
+                        <div
+                          className="h-1.5 bg-emerald-600"
+                          style={{ width: `${audioDuration ? Math.min(100, Math.max(0, (audioTime / audioDuration) * 100)) : 0}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground flex items-center justify-between">
+                        <span>{fmt(audioTime)}</span>
+                        <span>{fmt(audioDuration)}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </TabsContent>
