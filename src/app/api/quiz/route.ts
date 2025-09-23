@@ -3,6 +3,11 @@ import { checkRateLimit, getIdentifier } from "@/lib/rate-limit";
 import { hfFetch } from "@/lib/hf";
 
 const HF_MODEL = "google/flan-t5-large";
+const FALLBACK_MODELS = [
+  "google/flan-t5-large",
+  "google/flan-t5-base",
+  "google/flan-t5-small",
+];
 
 function buildPrompt(text: string, lang: string) {
   return (
@@ -53,8 +58,20 @@ export async function POST(req: Request) {
       options: { wait_for_model: true },
     };
 
-    const data = await hfFetch<any>({ model: HF_MODEL, payload });
-    const raw = Array.isArray(data) ? data[0]?.generated_text ?? "" : data?.generated_text ?? "";
+    let raw = "";
+    let lastErr: any = null;
+    for (const model of FALLBACK_MODELS) {
+      try {
+        const data = await hfFetch<any>({ model, payload });
+        raw = Array.isArray(data) ? data[0]?.generated_text ?? "" : data?.generated_text ?? "";
+        if (raw && typeof raw === "string" && raw.trim().length > 0) {
+          break;
+        }
+      } catch (e) {
+        lastErr = e;
+        continue;
+      }
+    }
 
     let questions = extractJsonArray(raw);
     if (!questions.length) {
