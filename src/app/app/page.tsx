@@ -47,6 +47,13 @@ export default function WorkspacePage() {
       setLoading(true);
       const res = await translateText(text, language);
       setTranslated(res.translation);
+      // Show chunking info and warnings when applicable
+      if (res?.chunks && res.chunks > 1) {
+        toast.info(`Translated in ${res.chunks} chunks`);
+      }
+      if (Array.isArray(res?.warnings) && res.warnings.length) {
+        toast.message(res.warnings[0]);
+      }
       toast.success("Translated successfully");
     } catch (e: any) {
       toast.error(e?.message || "Translation failed");
@@ -61,13 +68,28 @@ export default function WorkspacePage() {
       setLoading(true);
       const source = translated || text;
       const { audioBase64, mime } = await ttsSynthesize(source, language);
-      const blob = base64ToBlob(audioBase64, mime || "audio/wav");
+      const blob = base64ToBlob(audioBase64, mime || "audio/mpeg");
       const url = URL.createObjectURL(blob);
       if (audioSrc) URL.revokeObjectURL(audioSrc);
       setAudioSrc(url);
       toast.success("Audio ready");
     } catch (e: any) {
-      toast.error(e?.message || "TTS failed");
+      // Fallback to browser TTS
+      try {
+        if (typeof window !== "undefined" && "speechSynthesis" in window) {
+          const utter = new SpeechSynthesisUtterance(translated || text);
+          // Best-effort: pick a voice matching language code if available
+          const voices = window.speechSynthesis.getVoices();
+          const v = voices.find(v => v.lang?.toLowerCase().startsWith(language.toLowerCase()));
+          if (v) utter.voice = v;
+          window.speechSynthesis.speak(utter);
+          toast.info("Using browser TTS fallback");
+        } else {
+          toast.error(e?.message || "TTS failed");
+        }
+      } catch {
+        toast.error(e?.message || "TTS failed");
+      }
     } finally {
       setLoading(false);
     }
@@ -115,8 +137,11 @@ export default function WorkspacePage() {
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (!/(text|markdown|msword|officedocument)/.test(f.type) && !/\.(txt|md|docx)$/i.test(f.name)) {
-      toast.error("Unsupported file type. Use .txt, .md, or .docx");
+    if (
+      !/(text|markdown|msword|officedocument|pdf)/.test(f.type) &&
+      !/\.(txt|md|docx|pdf)$/i.test(f.name)
+    ) {
+      toast.error("Unsupported file type. Use .txt, .md, .docx or .pdf");
       return;
     }
     const reader = new FileReader();
@@ -192,7 +217,7 @@ export default function WorkspacePage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Input type="file" accept=".txt,.md,.docx,text/plain,text/markdown,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFile} aria-label="Upload notes file" />
+              <Input type="file" accept=".txt,.md,.docx,.pdf,text/plain,text/markdown,application/pdf,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFile} aria-label="Upload notes file" />
               <Button onClick={handleTranslate} disabled={!canRun || loading} aria-label="Run translation">
                 <FolderDown className="h-4 w-4 mr-2" /> Translate
               </Button>
