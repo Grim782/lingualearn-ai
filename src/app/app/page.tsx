@@ -9,11 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Copy, Eraser, FolderDown, Languages, Play, Save, Volume2 } from "lucide-react";
+import { Copy, Eraser, FolderDown, Languages, Play, Save, Volume2, Loader2 } from "lucide-react";
 import { translateText, ttsSynthesize, generateQuiz } from "@/lib/api";
 import { loadSessions, saveSession, deleteSession, type LinguaSession } from "@/lib/storage";
 import { Toaster } from "@/components/ui/sonner";
 import { splitIntoChunks } from "@/lib/chunk";
+import { Progress } from "@/components/ui/progress";
 
 const LANGUAGES = [
   { value: "en", label: "English" },
@@ -43,6 +44,13 @@ export default function WorkspacePage() {
   }, []);
 
   const canRun = useMemo(() => text.trim().length > 0 && !!language, [text, language]);
+  const showProgress = loading && chunkTotal > 1;
+  const progressPct = useMemo(
+    () => (chunkTotal > 0 ? Math.round((chunkProgress / chunkTotal) * 100) : 0),
+    [chunkProgress, chunkTotal]
+  );
+  const charCount = useMemo(() => text.length, [text]);
+  const wordCount = useMemo(() => (text.trim() ? text.trim().split(/\s+/).length : 0), [text]);
 
   async function handleTranslate() {
     if (!canRun) return;
@@ -214,11 +222,14 @@ export default function WorkspacePage() {
           <Button onClick={onSave} aria-label="Save session" className="bg-emerald-600 hover:bg-emerald-700"><Save className="h-4 w-4 mr-2" />Save</Button>
         </div>
       </div>
-      {loading && chunkTotal > 1 ? (
+      {showProgress && (
         <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900" role="status" aria-live="polite">
-          Translating chunk {chunkProgress}/{chunkTotal}...
+          Translating chunk {chunkProgress}/{chunkTotal} ({progressPct}%)...
+          <div className="mt-2">
+            <Progress value={progressPct} className="h-2" />
+          </div>
         </div>
-      ) : null}
+      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         <Card aria-label="Input panel">
@@ -244,12 +255,20 @@ export default function WorkspacePage() {
             <div className="grid gap-2">
               <Label htmlFor="notes">Your notes</Label>
               <Textarea id="notes" value={text} onChange={(e) => setText(e.target.value)} rows={10} placeholder="Paste text or upload a file..." />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{wordCount} words</span>
+                <span>{charCount} characters</span>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Input type="file" accept=".txt,.md,.docx,.pdf,text/plain,text/markdown,application/pdf,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFile} aria-label="Upload notes file" />
               <Button onClick={handleTranslate} disabled={!canRun || loading} aria-label="Run translation">
-                <FolderDown className="h-4 w-4 mr-2" /> Translate
+                {loading ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Working...</>
+                ) : (
+                  <><FolderDown className="h-4 w-4 mr-2" /> Translate</>
+                )}
               </Button>
               <Button variant="secondary" onClick={handleTTS} disabled={loading || (!translated && !text)} aria-label="Generate audio">
                 <Volume2 className="h-4 w-4 mr-2" /> Listen
