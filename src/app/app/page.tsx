@@ -9,12 +9,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Copy, Eraser, FolderDown, Languages, Play, Save, Volume2, Loader2 } from "lucide-react";
+import { Copy, Eraser, FolderDown, Languages, Play, Save, Volume2, Loader2, Pause, Square, Download } from "lucide-react";
 import { translateText, ttsSynthesize, generateQuiz } from "@/lib/api";
 import { loadSessions, saveSession, deleteSession, type LinguaSession } from "@/lib/storage";
 import { Toaster } from "@/components/ui/sonner";
 import { splitIntoChunks } from "@/lib/chunk";
 import { Progress } from "@/components/ui/progress";
+import jsPDF from "jspdf";
 
 const LANGUAGES = [
   { value: "en", label: "English" },
@@ -38,12 +39,15 @@ export default function WorkspacePage() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [chunkProgress, setChunkProgress] = useState(0);
   const [chunkTotal, setChunkTotal] = useState(0);
+  const [uploadedContent, setUploadedContent] = useState<string>("");
+  const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setSessions(loadSessions());
   }, []);
 
-  const canRun = useMemo(() => text.trim().length > 0 && !!language, [text, language]);
+  const canRun = useMemo(() => (text.trim().length > 0 || uploadedContent.trim().length > 0) && !!language, [text, uploadedContent, language]);
   const showProgress = loading && chunkTotal > 1;
   const progressPct = useMemo(
     () => (chunkTotal > 0 ? Math.round((chunkProgress / chunkTotal) * 100) : 0),
@@ -56,8 +60,9 @@ export default function WorkspacePage() {
     if (!canRun) return;
     try {
       setLoading(true);
+      const source = uploadedContent.trim().length > 0 ? uploadedContent : text;
       // Client-side chunking for live progress; server also supports chunking safely.
-      const { chunks } = splitIntoChunks(text);
+      const { chunks } = splitIntoChunks(source);
       if (chunks.length > 1) {
         setChunkTotal(chunks.length);
         setChunkProgress(0);
@@ -73,9 +78,8 @@ export default function WorkspacePage() {
         toast.success("Translated successfully");
         toast.info(`Translated in ${chunks.length} chunks`);
       } else {
-        const res = await translateText(text, language);
+        const res = await translateText(source, language);
         setTranslated(res.translation);
-        // Show chunking info and warnings when applicable
         if (res?.chunks && res.chunks > 1) {
           toast.info(`Translated in ${res.chunks} chunks`);
         }
@@ -96,10 +100,10 @@ export default function WorkspacePage() {
   }
 
   async function handleTTS() {
-    if (!translated && !text) return;
+    if (!translated && !text && !uploadedContent) return;
     try {
       setLoading(true);
-      const source = translated || text;
+      const source = translated || text || uploadedContent;
       const { audioBase64, mime } = await ttsSynthesize(source, language);
       const blob = base64ToBlob(audioBase64, mime || "audio/mpeg");
       const url = URL.createObjectURL(blob);
@@ -110,7 +114,7 @@ export default function WorkspacePage() {
       // Fallback to browser TTS
       try {
         if (typeof window !== "undefined" && "speechSynthesis" in window) {
-          const utter = new SpeechSynthesisUtterance(translated || text);
+          const utter = new SpeechSynthesisUtterance(translated || text || uploadedContent);
           // Best-effort: pick a voice matching language code if available
           const voices = window.speechSynthesis.getVoices();
           const v = voices.find(v => v.lang?.toLowerCase().startsWith(language.toLowerCase()));
@@ -129,10 +133,10 @@ export default function WorkspacePage() {
   }
 
   async function handleQuiz() {
-    if (!translated && !text) return;
+    if (!translated && !text && !uploadedContent) return;
     try {
       setLoading(true);
-      const source = translated || text;
+      const source = translated || text || uploadedContent;
       const res = await generateQuiz(source, language);
       setQuiz(res.quiz);
       toast.success("Quiz generated");
@@ -178,9 +182,28 @@ export default function WorkspacePage() {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => setText(String(reader.result || ""));
+    reader.onload = () => {
+      setUploadedContent(String(reader.result || ""));
+      setUploadedFileName(f.name);
+      toast.success("File added. Ready to translate");
+    };
     reader.readAsText(f);
   }
+
+  function removeFile() {
+    setUploadedContent("");
+    setUploadedFileName("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function handleDrop(ev: React.DragEvent<HTMLDivElement>) {
+    ev.preventDefault();
+    const f = ev.dataTransfer.files?.[0];
+    if (!f) return;
+    const fakeEvent = { target: { files: [f] } } as unknown as React.ChangeEvent<HTMLInputElement>;
+    onFile(fakeEvent);
+  }
+  function handleDragOver(ev: React.DragEvent<HTMLDivElement>) { ev.preventDefault(); }
 
   function onCopy() {
     const content = translated || text;
@@ -191,8 +214,38 @@ export default function WorkspacePage() {
     setText("");
     setTranslated("");
     setQuiz(null);
+    setUploadedContent("");
+    setUploadedFileName("");
     if (audioSrc) URL.revokeObjectURL(audioSrc);
     setAudioSrc(null);
+  }
+
+  function exportPDF() {
+    if (!translated.trim()) {
+      toast.error("Nothing to export");
+      return;
+    }
+    const doc = new jsPDF();
+    doc.setFontSize(12);
+    const margin = 15;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const maxWidth = pageWidth - margin * 2;
+    const lines = doc.splitTextToSize(translated, maxWidth);
+    doc.text(lines, margin, 20);
+    doc.save("lingualearn-translation.pdf");
+  }
+
+  function playAudio() { audioRef.current?.play(); }
+  function pauseAudio() { audioRef.current?.pause(); }
+  function stopAudio() { if (audioRef.current) { audioRef.current.pause(); audioRef.current.currentTime = 0; } }
+  function downloadAudio() {
+    if (!audioSrc) return;
+    const a = document.createElement("a");
+    a.href = audioSrc;
+    a.download = `lingualearn-${language}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   }
 
   function loadFromHistory(s: LinguaSession) {
@@ -261,8 +314,37 @@ export default function WorkspacePage() {
               </div>
             </div>
 
+            <div
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              className="w-full rounded-md border-2 border-dashed border-border p-4 text-sm bg-accent/30"
+              aria-label="Upload notes file dropzone"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.md,.docx,.pdf,text/plain,text/markdown,application/pdf,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={onFile}
+                  className="hidden"
+                />
+                <Button type="button" variant="secondary" onClick={() => fileInputRef.current?.click()} aria-label="Browse file">
+                  <FolderDown className="h-4 w-4 mr-2" /> Browse file
+                </Button>
+                {uploadedFileName ? (
+                  <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-1 text-xs">
+                    {uploadedFileName}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">Or drag & drop here</span>
+                )}
+                {uploadedFileName && (
+                  <Button type="button" variant="outline" size="sm" onClick={removeFile} aria-label="Remove file">Remove</Button>
+                )}
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-2">
-              <Input type="file" accept=".txt,.md,.docx,.pdf,text/plain,text/markdown,application/pdf,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={onFile} aria-label="Upload notes file" />
               <Button onClick={handleTranslate} disabled={!canRun || loading} aria-label="Run translation">
                 {loading ? (
                   <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Working...</>
@@ -270,10 +352,10 @@ export default function WorkspacePage() {
                   <><FolderDown className="h-4 w-4 mr-2" /> Translate</>
                 )}
               </Button>
-              <Button variant="secondary" onClick={handleTTS} disabled={loading || (!translated && !text)} aria-label="Generate audio">
+              <Button variant="secondary" onClick={handleTTS} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate audio">
                 <Volume2 className="h-4 w-4 mr-2" /> Listen
               </Button>
-              <Button variant="outline" onClick={handleQuiz} disabled={loading || (!translated && !text)} aria-label="Generate quiz">
+              <Button variant="outline" onClick={handleQuiz} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate quiz">
                 <Play className="h-4 w-4 mr-2" /> Practice
               </Button>
             </div>
@@ -295,6 +377,11 @@ export default function WorkspacePage() {
               </TabsList>
 
               <TabsContent value="translate" className="mt-4">
+                <div className="flex items-center justify-end mb-2">
+                  <Button size="sm" variant="outline" onClick={exportPDF} disabled={!translated.trim()} aria-label="Export PDF">
+                    <Download className="h-4 w-4 mr-2" /> Export PDF
+                  </Button>
+                </div>
                 <div className="rounded-md border border-border p-3 text-sm min-h-48 whitespace-pre-wrap">
                   {translated || "Run translation to see results here."}
                 </div>
@@ -303,15 +390,23 @@ export default function WorkspacePage() {
               <TabsContent value="listen" className="mt-4 space-y-3">
                 <p className="text-sm text-muted-foreground">Generate audio from your translated text or original text.</p>
                 <div className="flex items-center gap-3">
-                  <Button onClick={handleTTS} disabled={loading || (!translated && !text)} aria-label="Play TTS"><Volume2 className="h-4 w-4 mr-2" />Generate Audio</Button>
-                  {audioSrc && (
-                    <audio ref={audioRef} src={audioSrc} controls className="w-full" aria-label="Text to speech player" />
-                  )}
+                  <Button onClick={handleTTS} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate Audio"><Volume2 className="h-4 w-4 mr-2" />Generate Audio</Button>
                 </div>
+                {audioSrc && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="secondary" onClick={playAudio} aria-label="Play"><Play className="h-4 w-4 mr-2" />Play</Button>
+                      <Button size="sm" variant="outline" onClick={pauseAudio} aria-label="Pause"><Pause className="h-4 w-4 mr-2" />Pause</Button>
+                      <Button size="sm" variant="destructive" onClick={stopAudio} aria-label="Stop"><Square className="h-4 w-4 mr-2" />Stop</Button>
+                      <Button size="sm" variant="outline" onClick={downloadAudio} aria-label="Download audio"><Download className="h-4 w-4 mr-2" />Download</Button>
+                    </div>
+                    <audio ref={audioRef} src={audioSrc} controls className="w-full" aria-label="Text to speech player" />
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="practice" className="mt-4 space-y-3">
-                <Button variant="secondary" onClick={handleQuiz} disabled={loading || (!translated && !text)} aria-label="Generate quiz now">Generate Quiz</Button>
+                <Button variant="secondary" onClick={handleQuiz} disabled={loading || (!translated && !text && !uploadedContent)} aria-label="Generate quiz now">Generate Quiz</Button>
                 {quiz ? (
                   <div className="space-y-4">
                     {quiz.mcq?.length ? (
