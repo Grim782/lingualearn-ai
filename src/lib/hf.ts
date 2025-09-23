@@ -1,4 +1,4 @@
-import LRUCache from "lru-cache";
+import { LRUCache } from "lru-cache";
 
 // Simple HF client with caching + retries. Uses single API key.
 // Cache key: method|model|hash(payload)
