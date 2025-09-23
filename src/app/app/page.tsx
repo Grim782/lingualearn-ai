@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -286,6 +287,16 @@ export default function WorkspacePage() {
   return (
     <div className="min-h-screen mx-auto w-full max-w-6xl px-6 py-8">
       <Toaster richColors position="top-right" />
+      {/* Local page header only for Workspace */}
+      <header className="mb-4 border-b border-border">
+        <div className="flex h-12 items-center justify-between">
+          <Link href="/" className="text-sm font-semibold">LinguaLearn AI</Link>
+          <nav className="flex items-center gap-4 text-sm">
+            <span className="text-foreground">Workspace</span>
+            <Link href="/practice" className="text-muted-foreground hover:text-foreground">Practice</Link>
+          </nav>
+        </div>
+      </header>
       <div className="flex items-center justify-between gap-3 mb-2">
         <div className="flex items-center gap-2" aria-label="App header">
           <Languages className="h-5 w-5 text-emerald-600" aria-hidden />

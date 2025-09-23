@@ -8,30 +8,10 @@ import { CheckCircle2, Headphones, Languages, NotebookPen, Quote, Sparkles, Star
 export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
-      {/* Navbar */}
-      <header className="sticky top-0 z-30 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
-        <div className="mx-auto w-full max-w-6xl px-6 py-4 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2" aria-label="LinguaLearn AI home">
-            <motion.div initial={{ rotate: -8, scale: 0.9 }} animate={{ rotate: 0, scale: 1 }} transition={{ type: "spring", stiffness: 120 }} className="h-8 w-8 rounded-md bg-emerald-600 grid place-items-center text-white">
-              <Sparkles className="h-4 w-4" />
-            </motion.div>
-            <span className="font-semibold tracking-tight">LinguaLearn AI</span>
-          </Link>
-          <nav className="flex items-center gap-3" aria-label="Primary">
-            <Link href="#features" className="text-sm hover:underline">Features</Link>
-            <Link href="#testimonials" className="text-sm hover:underline">Testimonials</Link>
-            <Link href="#footer" className="text-sm hover:underline">Contact</Link>
-            <Button asChild className="ml-2 bg-emerald-600 hover:bg-emerald-700">
-              <Link href="/app" aria-label="Open LinguaLearn workspace">Open App</Link>
-            </Button>
-          </nav>
-        </div>
-      </header>
-
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(600px_300px_at_10%_-10%,oklch(0.88_0.06_160_/_0.6),transparent_60%),radial-gradient(500px_220px_at_90%_10%,oklch(0.9_0.08_210_/_0.5),transparent_60%)]" />
-        <div className="mx-auto w-full max-w-6xl px-6 py-20 md:py-28 grid md:grid-cols-2 gap-10 items-center">
+        <div className="mx-auto w-full max-w-6xl px-6 py-6 md:py-10 grid md:grid-cols-2 gap-6 md:gap-8 items-center">
           <div>
             <motion.h1 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.6 }} className="text-4xl md:text-5xl/tight font-extrabold tracking-tight">
               Breaking Language Barriers in Education
@@ -47,16 +27,22 @@ export default function HomePage() {
                 <a href="#features" aria-label="Learn more about features">Learn More</a>
               </Button>
             </motion.div>
-            {/* Re-styled feature highlights as pill buttons for better visual flow */}
-            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Button variant="secondary" className="justify-start rounded-full px-4 py-5 text-sm">
-                <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> 95+ Lighthouse target
+            {/* Upgraded feature highlights as segmented/pill buttons for better visual flow */}
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3" role="list">
+              <Button asChild variant="outline" className="justify-start rounded-full px-4 py-5 text-sm border-border bg-card transition shadow-sm hover:shadow-md hover:-translate-y-0.5 ring-1 ring-transparent hover:ring-emerald-200">
+                <a href="#features" aria-label="Performance target details">
+                  <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> 95+ Lighthouse target
+                </a>
               </Button>
-              <Button variant="secondary" className="justify-start rounded-full px-4 py-5 text-sm">
-                <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> TTS in 100+ languages
+              <Button asChild variant="outline" className="justify-start rounded-full px-4 py-5 text-sm border-border bg-card transition shadow-sm hover:shadow-md hover:-translate-y-0.5 ring-1 ring-transparent hover:ring-emerald-200">
+                <a href="#features" aria-label="Text-to-speech languages">
+                  <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> TTS in 100+ languages
+                </a>
               </Button>
-              <Button variant="secondary" className="justify-start rounded-full px-4 py-5 text-sm">
-                <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> Quiz generation
+              <Button asChild variant="outline" className="justify-start rounded-full px-4 py-5 text-sm border-border bg-card transition shadow-sm hover:shadow-md hover:-translate-y-0.5 ring-1 ring-transparent hover:ring-emerald-200">
+                <Link href="/practice" aria-label="Try quiz generation">
+                  <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" /> Quiz generation
+                </Link>
               </Button>
             </div>
           </div>
@@ -67,8 +53,8 @@ export default function HomePage() {
       </section>
 
       {/* Features */}
-      <section id="features" className="mx-auto w-full max-w-6xl px-6 py-16">
-        <div className="text-center mb-10">
+      <section id="features" className="mx-auto w-full max-w-6xl px-6 py-12">
+        <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold">Everything you need to learn in any language</h2>
           <p className="text-muted-foreground mt-2">Built with accessibility, performance, and delightful motion.</p>
         </div>
@@ -94,7 +80,7 @@ export default function HomePage() {
 
       {/* Problem/Solution */}
       <section className="bg-secondary/50 border-y border-border">
-        <div className="mx-auto w-full max-w-6xl px-6 py-16 grid md:grid-cols-2 gap-10 items-center">
+        <div className="mx-auto w-full max-w-6xl px-6 py-12 grid md:grid-cols-2 gap-10 items-center">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">The problem</h2>
             <p className="text-muted-foreground mt-3">
@@ -111,8 +97,8 @@ export default function HomePage() {
       </section>
 
       {/* Testimonials */}
-      <section id="testimonials" className="mx-auto w-full max-w-6xl px-6 py-16">
-        <div className="text-center mb-10">
+      <section id="testimonials" className="mx-auto w-full max-w-6xl px-6 py-12">
+        <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold">Loved by students and educators</h2>
           <p className="text-muted-foreground mt-2">Real results from inclusive learning.</p>
         </div>

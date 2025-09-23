@@ -30,18 +30,6 @@ export default function RootLayout({
           data-debug="true"
           data-custom-data='{"appName": "YourApp", "version": "1.0.0", "greeting": "hi"}'
         />
-        {/* Simple top navigation */}
-        <header className="border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between px-4">
-            <Link href="/" className="text-sm font-semibold">
-              LinguaLearn AI
-            </Link>
-            <nav className="flex items-center gap-4 text-sm">
-              <Link href="/app" className="text-muted-foreground hover:text-foreground">Workspace</Link>
-              <Link href="/practice" className="text-muted-foreground hover:text-foreground">Practice</Link>
-            </nav>
-          </div>
-        </header>
         {children}
         <VisualEditsMessenger />
       </body>
